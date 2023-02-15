@@ -1,0 +1,4 @@
+{
+	"method": "isPrime",
+	"prime": 4590.3
+}
