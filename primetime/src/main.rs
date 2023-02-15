@@ -90,7 +90,7 @@ async fn handle_request_raw(
 fn is_prime(num: serde_json::value::Number) -> bool {
     let num: Option<u64> = num.as_u64();
     match num {
-        Some(n) => n > 1 && (2..n).all(|v| n % v != 0),
+        Some(n) => n > 1 && (2..(n as f64).sqrt().ceil() as u64).all(|v| n % v != 0),
         None => false,
     }
 }
