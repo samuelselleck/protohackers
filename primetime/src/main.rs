@@ -21,7 +21,7 @@ struct Response {
 #[derive(Debug, Serialize, Deserialize)]
 struct Request {
     method: String,
-    prime: serde_json::value::Number,
+    number: serde_json::value::Number,
 }
 
 #[tokio::main]
@@ -71,7 +71,7 @@ async fn handle_request_raw(
         Some(request) => {
             let mut response = serde_json::to_string(&Response {
                 method: "isPrime".to_string(),
-                prime: is_prime(request.prime),
+                prime: is_prime(request.number),
             })?;
             response.push('\n');
             writer.write_all(&response.as_bytes()).await?;
