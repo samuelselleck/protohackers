@@ -47,9 +47,7 @@ async fn handle_connection(socket: TcpStream) -> Result<()> {
         match res {
             Ok(true) => continue,
             Ok(false) => break,
-            Err(e) => {
-                println!("error handling request: {}", e);
-            }
+            Err(_) => break,
         }
     }
     Ok(())
