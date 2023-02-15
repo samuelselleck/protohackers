@@ -31,10 +31,12 @@ async fn main() -> io::Result<()> {
     loop {
         let (socket, _) = listener.accept().await?;
         tokio::spawn(async {
+            println!("connection established");
             let res = handle_connection(socket).await;
             if let Err(e) = res {
                 println!("error handling connection: {}", e);
             }
+            println!("connection closed");
         });
     }
 }
@@ -65,6 +67,7 @@ async fn handle_request_raw(
     let parsed = serde_json::from_slice::<Request>(&buf)
         .ok()
         .filter(|r| r.method == "isPrime");
+    print!("parsed: {:?} -> ", parsed);
     match parsed {
         Some(request) => {
             let mut response = serde_json::to_string(&Response {
@@ -72,10 +75,12 @@ async fn handle_request_raw(
                 prime: is_prime(request.number),
             })?;
             response.push('\n');
+            println!("response: {:?}", response);
             writer.write_all(&response.as_bytes()).await?;
             Ok(true)
         }
         None => {
+            println!("response: malformed!");
             writer.write_all(b"malformed!\n").await?;
             Ok(false)
         }
