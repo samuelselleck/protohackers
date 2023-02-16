@@ -26,6 +26,9 @@ impl PriceData {
     }
 
     fn calculate_mean(&self, start: i32, end: i32) -> i32 {
+        if end <= start {
+            return 0;
+        }
         let prices = self.data.range(start..=end).flat_map(|(_, v)| v.iter());
         let mut sum: i128 = 0;
         let mut count = 0;
