@@ -78,7 +78,7 @@ impl ChatRoomConnection {
                 Ok(l) = lines.next_line() => {
                     if let Some(m) = l {
                         println!("recieved message from client {}: {}", &name,  m);
-                        self.sender.send(format!("[{}]: {}\n", &name, m))?;
+                        self.sender.send(format!("[{}] {}\n", &name, m))?;
                     } else {
                         break
                     }
