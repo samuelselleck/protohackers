@@ -44,7 +44,7 @@ impl ChatRoomConnection {
         let (reader, mut writer) = stream.into_split();
         let mut lines = BufReader::new(reader).lines();
         writer
-            .write_all("Welcome to budgetchat! What shall I call you?".as_bytes())
+            .write_all("Welcome to budgetchat! What shall I call you?\n".as_bytes())
             .await?;
         let name = lines
             .next_line()
@@ -53,7 +53,7 @@ impl ChatRoomConnection {
         let correct = name.len() >= 1 && name.chars().all(|c| c.is_alphanumeric());
         if !correct {
             writer
-                .write_all("please provide a valid name (at least 1 characater long, alpha-numeric characters.)".as_bytes())
+                .write_all("please provide a valid name (at least 1 characater long, alpha-numeric characters.)\n".as_bytes())
                 .await?;
             return Err("not valid name".into());
         }
@@ -70,7 +70,7 @@ impl ChatRoomConnection {
         }
         .await;
         writer
-            .write_all(format!("* current users: {}", active_users.join(", ")).as_bytes())
+            .write_all(format!("* current users: {}\n", active_users.join(", ")).as_bytes())
             .await?;
 
         loop {
