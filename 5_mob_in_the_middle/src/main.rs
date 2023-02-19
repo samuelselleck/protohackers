@@ -26,39 +26,30 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
     let chat_connection = TcpStream::connect(addr).await?;
     let (vic_r, mut vic_w) = victim_connection.into_split();
     let (chat_r, mut chat_w) = chat_connection.into_split();
-    let mut chat_r = BufReader::new(chat_r);
-    let mut vic_r = BufReader::new(vic_r);
+    let mut chat_r = BufReader::new(chat_r).lines();
+    let mut vic_r = BufReader::new(vic_r).lines();
 
     println!("entered");
     loop {
         println!("mess");
-        let mut buf_vic = Vec::new();
-        let mut buf_chat = Vec::new();
         tokio::select! {
-            //TODO next_line should not process the last line if return is pressed!
-            res = vic_r.read_until(b'\n', &mut buf_vic) => {
-                println!("{:?}", buf_vic);
-                let n = res?;
-                if n == 0 || buf_vic.last().unwrap() != &b'\n' {
-                    break
-                }
-                let vic_message = String::from_utf8(buf_vic)?;
+            res = vic_r.next_line() => {
+                let vic_message = res?.ok_or::<String>("no message".into())?;
                 println!("message from vic: {:?}", vic_message);
                     let mut ret = replace_bogus(vic_message);
                     ret.push('\n');
                     chat_w.write_all(ret.as_bytes()).await?;
             },
-            res  = chat_r.read_until(b'\n', &mut buf_chat) => {
-                let n = res?;
-                if n == 0 || buf_chat.last().unwrap() != &b'\n' {
-                    break
-                }
-                let chat_message = String::from_utf8(buf_chat)?;
+            res = chat_r.next_line() => {
+                let chat_message = res?.ok_or::<String>("no message".into())?;
                 println!("message from server: {:?}", chat_message);
                     let mut ret = replace_bogus(chat_message);
                     ret.push('\n');
                     vic_w.write_all(ret.as_bytes()).await?;
             },
+            else => {
+                break
+            }
         }
     }
     Ok(())
