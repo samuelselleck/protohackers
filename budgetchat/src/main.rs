@@ -50,7 +50,7 @@ impl ChatRoomConnection {
             .next_line()
             .await?
             .ok_or("connection closed before name specified")?;
-        let correct = name.len() >= 1 && name.chars().all(|c| c.is_alphanumeric());
+        let correct = !name.is_empty() && name.chars().all(|c| c.is_alphanumeric());
         if !correct {
             writer
                 .write_all("please provide a valid name (at least 1 characater long, alpha-numeric characters.)\n".as_bytes())
@@ -103,7 +103,7 @@ impl ChatRoomConnection {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let listener = TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = TcpListener::bind("0.0.0.0:16963").await?;
     let mut room = ChatRoom::new();
     loop {
         let (socket, _) = listener.accept().await?;
