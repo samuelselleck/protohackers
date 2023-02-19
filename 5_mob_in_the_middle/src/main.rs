@@ -35,7 +35,7 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
         let mut buf_chat = Vec::new();
         tokio::select! {
             res  = vic_r.read_until(b'\n', &mut buf_vic) => {
-                println!("{:?}", buf_vic);
+                println!("recv vic {:?}", buf_vic);
                 let n = res?;
                 if n == 0 || buf_vic.last().unwrap() != &b'\n' {
                     break
@@ -44,9 +44,11 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
                 println!("message from vic: {:?}", vic_message);
                 let mut ret = replace_bogus(vic_message);
                 ret.push('\n');
+                println!("send vic -> serv {:?}", ret.as_bytes());
                 chat_w.write_all(ret.as_bytes()).await?;
             },
             res = chat_r.read_until(b'\n', &mut buf_chat) => {
+                println!("recv serv {:?}", buf_chat);
                 let n = res?;
                 if n == 0 || buf_chat.last().unwrap() != &b'\n' {
                     break
@@ -55,6 +57,7 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
                 println!("message from server: {:?}", chat_message);
                 let mut ret = replace_bogus(chat_message);
                 ret.push('\n');
+                println!("send serv -> vic {:?}", ret.as_bytes());
                 vic_w.write_all(ret.as_bytes()).await?;
             },
             else => {
