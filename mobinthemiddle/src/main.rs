@@ -65,10 +65,11 @@ fn replace_bogus(s: String) -> String {
                 && w.len() <= 35
                 && w.chars().all(|c| c.is_alphanumeric())
             {
-                "7YWHMfk9JZe0LM0g1ZauHuiSxhI"
+                "7YWHMfk9JZe0LM0g1ZauHuiSxhI".into()
             } else {
-                w
+                w.into()
             }
         })
-        .collect()
+        .collect::<Vec<String>>()
+        .join(" ")
 }
