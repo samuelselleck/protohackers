@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
-    let regex = Regex::new(r"\b(7[a-zA-Z0-9]{25, 34})\b").unwrap();
+    let regex = Regex::new(r"(^|\s)(7[a-zA-Z0-9]{25, 34})($|\s)").unwrap();
     loop {
         let (socket, _) = listener.accept().await?;
         let rgx = regex.clone();
