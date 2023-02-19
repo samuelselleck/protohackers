@@ -30,8 +30,11 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
     let mut vic_r = BufReader::new(vic_r).lines();
 
     println!("entered");
+    let mut buf_vic = Vec::new();
+    let mut buf_chat = Vec::new();
     loop {
         tokio::select! {
+            //TODO next_line should not process the last line if return is pressed!
             Ok(vic_message) = vic_r.next_line() => {
                 println!("message from vic: {:?}", vic_message);
                 if let Some(vic_message) = vic_message {
@@ -53,7 +56,7 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
                 }
             },
             else => {
-                break
+
             }
         }
     }
