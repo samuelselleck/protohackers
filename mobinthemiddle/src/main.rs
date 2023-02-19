@@ -12,13 +12,13 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
-    let regex = Regex::new(r"(?:^|\s)(7[a-zA-Z0-9]{25, 34})(?:$|\s)").unwrap();
+    let regex = Regex::new(r"(^|\s)(7[a-zA-Z0-9]{25, 34})($|\s)").unwrap();
     loop {
         let (socket, _) = listener.accept().await?;
         let rgx = regex.clone();
         tokio::spawn(async {
             println!("connection established");
-            replacing_proxy(socket, rgx, "7YWHMfk9JZe0LM0g1ZauHuiSxhI")
+            replacing_proxy(socket, rgx, "${1}7YWHMfk9JZe0LM0g1ZauHuiSxhI${3}")
                 .await
                 .expect("closed unexpectedly");
             println!("connection closed");
