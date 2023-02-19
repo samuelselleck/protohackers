@@ -52,6 +52,9 @@ async fn replacing_proxy(victim_connection: TcpStream) -> Result<()> {
                     break
                 }
             },
+            else => {
+                break
+            }
         }
     }
     Ok(())
