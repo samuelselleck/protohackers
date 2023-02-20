@@ -1,5 +1,5 @@
-use std::error::Error;
 use std::io;
+use std::io::ErrorKind;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -8,7 +8,7 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = io::Result<T>;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -26,11 +26,6 @@ async fn main() -> io::Result<()> {
     }
 }
 
-#[derive(Default)]
-struct RewriteState {
-    read_buf: Vec<u8>,
-}
-
 async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     let addr = "chat.protohackers.com:16963";
     let chat_connection = TcpStream::connect(addr).await?;
@@ -38,38 +33,52 @@ async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     let (chat_r, mut chat_w) = chat_connection.into_split();
     let mut chat_r = BufReader::new(chat_r);
     let mut vic_r = BufReader::new(vic_r);
-    let mut vic_to_chat_state = RewriteState::default();
-    let mut chat_to_vic_state = RewriteState::default();
+    let mut vic_buf = Vec::new();
+    let mut chat_buf = Vec::new();
     loop {
         tokio::select! {
-            res = rewrite_line(id, "victim", &mut vic_r, "chat server", &mut chat_w, &mut vic_to_chat_state) => { res? },
-            res = rewrite_line(id, "chat server", &mut chat_r, "victim", &mut vic_w, &mut chat_to_vic_state) => { res? }
+            res = read_line(id, "victim", &mut vic_r, &mut vic_buf) => {
+                let msg = res?;
+                write_rewritten_line(id, "chat server", &mut chat_w, msg).await.unwrap();
+            },
+            res2 = read_line(id, "chat server", &mut chat_r, &mut chat_buf) => {
+                let msg = res2?;
+                write_rewritten_line(id, "victim", &mut vic_w, msg).await.unwrap();
+            }
         }
     }
 }
 
-async fn rewrite_line(
+async fn read_line(
     connection_id: i32,
     from_ident: &str,
     from: &mut BufReader<OwnedReadHalf>,
-    to_ident: &str,
-    to: &mut OwnedWriteHalf,
-    state: &mut RewriteState,
-) -> Result<()> {
-    let n = from.read_until(b'\n', &mut state.read_buf).await?;
-    if n == 0 || state.read_buf.last().unwrap() != &b'\n' {
-        return Err("end".into());
+    buf: &mut Vec<u8>,
+) -> Result<String> {
+    let n = from.read_until(b'\n', buf).await?;
+    if n == 0 || buf.last().unwrap() != &b'\n' {
+        return Err(io::Error::new(ErrorKind::Other, "end"));
     }
-    let message = String::from_utf8(state.read_buf.clone())?;
+    let message =
+        String::from_utf8(buf.clone()).map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
     println!(
         "{}: recv ({: <12}): {:?}",
         connection_id, from_ident, message
     );
+    buf.clear();
+    Ok(message)
+}
+
+async fn write_rewritten_line(
+    id: i32,
+    to_ident: &str,
+    to: &mut OwnedWriteHalf,
+    message: String,
+) -> Result<()> {
     let mut ret = replace_bogus(message);
     ret.push('\n');
-    println!("{}: sent ({: <12}): {:?}", connection_id, to_ident, ret);
+    println!("{}: sent ({: <12}): {:?}", id, to_ident, ret);
     to.write_all(ret.as_bytes()).await?;
-    *state = Default::default();
     Ok(())
 }
 
