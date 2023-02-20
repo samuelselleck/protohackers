@@ -33,9 +33,7 @@ async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     let (chat_r, mut chat_w) = chat_connection.into_split();
     let mut chat_r = BufReader::new(chat_r);
     let mut vic_r = BufReader::new(vic_r);
-    println!("entered");
     loop {
-        println!("mess");
         tokio::select! {
             res = rewrite_line(id, "victim", &mut vic_r, "chat server", &mut chat_w) => { res? },
             res = rewrite_line(id, "chat server", &mut chat_r, "victim", &mut vic_w) => { res? }
