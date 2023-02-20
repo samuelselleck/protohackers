@@ -26,6 +26,11 @@ async fn main() -> io::Result<()> {
     }
 }
 
+#[derive(Default)]
+struct RewriteState {
+    read_buf: Vec<u8>,
+}
+
 async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     let addr = "chat.protohackers.com:16963";
     let chat_connection = TcpStream::connect(addr).await?;
@@ -33,10 +38,12 @@ async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     let (chat_r, mut chat_w) = chat_connection.into_split();
     let mut chat_r = BufReader::new(chat_r);
     let mut vic_r = BufReader::new(vic_r);
+    let mut vic_to_chat_state = RewriteState::default();
+    let mut chat_to_vic_state = RewriteState::default();
     loop {
         tokio::select! {
-            res = rewrite_line(id, "victim", &mut vic_r, "chat server", &mut chat_w) => { res? },
-            res = rewrite_line(id, "chat server", &mut chat_r, "victim", &mut vic_w) => { res? }
+            res = rewrite_line(id, "victim", &mut vic_r, "chat server", &mut chat_w, &mut vic_to_chat_state) => { res? },
+            res = rewrite_line(id, "chat server", &mut chat_r, "victim", &mut vic_w, &mut chat_to_vic_state) => { res? }
         }
     }
 }
@@ -47,13 +54,13 @@ async fn rewrite_line(
     from: &mut BufReader<OwnedReadHalf>,
     to_ident: &str,
     to: &mut OwnedWriteHalf,
+    state: &mut RewriteState,
 ) -> Result<()> {
-    let mut buf = Vec::new();
-    let n = from.read_until(b'\n', &mut buf).await?;
-    if n == 0 || buf.last().unwrap() != &b'\n' {
+    let n = from.read_until(b'\n', &mut state.read_buf).await?;
+    if n == 0 || state.read_buf.last().unwrap() != &b'\n' {
         return Err("end".into());
     }
-    let message = String::from_utf8(buf)?;
+    let message = String::from_utf8(state.read_buf.clone())?;
     println!(
         "{}: recv ({: <12}): {:?}",
         connection_id, from_ident, message
@@ -62,6 +69,7 @@ async fn rewrite_line(
     ret.push('\n');
     println!("{}: sent ({: <12}): {:?}", connection_id, to_ident, ret);
     to.write_all(ret.as_bytes()).await?;
+    *state = Default::default();
     Ok(())
 }
 
