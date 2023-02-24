@@ -38,6 +38,7 @@ pub enum ServerMessage {
         road: RoadID,
         p1: (Mile, TimeStamp),
         p2: (Mile, TimeStamp),
+        speed: Speed,
     },
     HeartBeat,
 }
@@ -145,7 +146,7 @@ impl codec::Encoder<ServerMessage> for MessageCodec {
                 dst.put_u8(e.len() as u8);
                 dst.writer().write(e.as_bytes()).unwrap();
             },
-            ServerMessage::Ticket { plate, road, p1, p2 } => {
+            ServerMessage::Ticket { plate, road, p1, p2, speed } => {
                 dst.put_u8(0x21);
                 dst.put_u8(plate.len() as u8);
                 dst.writer().write(plate.as_bytes()).unwrap();
@@ -160,8 +161,7 @@ impl codec::Encoder<ServerMessage> for MessageCodec {
                 dst.put_u32(time1);
                 dst.put_u16(mile2);
                 dst.put_u32(time2);
-                let speed = (mile1 as f32 - mile2 as f32)/(time1 as f32 - time2 as f32).abs()*100.0;
-                dst.put_u16(speed as u16);
+                dst.put_u16(speed);
             }
             ServerMessage::HeartBeat => {
                 dst.put_u8(0x41);

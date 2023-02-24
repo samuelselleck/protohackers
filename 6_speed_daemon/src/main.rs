@@ -185,7 +185,7 @@ async fn handle_dispatcher(
 
         road_sightings.push((mile, time));
         let car_ticket_days = ticket_days.entry(plate.clone()).or_default();
-        if let Some((p1, p2)) =
+        if let Some((p1, p2, speed)) =
             should_be_ticketed(road_sightings, road_speed_limit, car_ticket_days)
         {
             let ticket = ServerMessage::Ticket {
@@ -193,6 +193,7 @@ async fn handle_dispatcher(
                 road: road_id,
                 p1,
                 p2,
+                speed,
             };
             tx_out.send(ticket).await.unwrap();
         }
@@ -203,13 +204,13 @@ fn should_be_ticketed(
     entries: &mut Vec<(Mile, TimeStamp)>,
     speed_limit: Speed,
     ticket_days: &mut HashSet<u32>,
-) -> Option<((Mile, TimeStamp), (Mile, TimeStamp))> {
+) -> Option<((Mile, TimeStamp), (Mile, TimeStamp), Speed)> {
     let n = entries.len();
     for i in 0..n {
         let (m1, t1) = entries[i];
         for j in (i + 1)..n {
             let (m2, t2) = entries[j];
-            let speed = ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs(); //TODO needs to be in correct unit
+            let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
             if speed > speed_limit as f64 {
                 entries.swap_remove(j);
                 entries.swap_remove(i);
@@ -222,7 +223,7 @@ fn should_be_ticketed(
                 if has_been_ticketed_for_day {
                     return None;
                 } else {
-                    return Some(((m1, t1), (m2, t2)));
+                    return Some(((m1, t1), (m2, t2), speed.ceil() as Speed));
                 }
             }
         }
