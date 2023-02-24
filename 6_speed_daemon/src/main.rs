@@ -212,7 +212,7 @@ fn should_be_ticketed(
         let (m1, t1) = entries[i];
         for j in (i + 1)..n {
             let (m2, t2) = entries[j];
-            let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
+            let speed = 100.0 * 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
             if speed > speed_limit as f64 {
                 entries.swap_remove(j);
                 entries.swap_remove(i);
