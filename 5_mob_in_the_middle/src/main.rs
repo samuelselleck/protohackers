@@ -38,12 +38,10 @@ async fn replacing_proxy(victim_connection: TcpStream, id: i32) -> Result<()> {
     loop {
         tokio::select! {
             res = read_line(id, "victim", &mut vic_r, &mut vic_buf) => {
-                let msg = res?;
-                write_rewritten_line(id, "chat server", &mut chat_w, msg).await.unwrap();
+                write_bogused_line(id, "chat server", &mut chat_w, res?).await?;
             },
-            res2 = read_line(id, "chat server", &mut chat_r, &mut chat_buf) => {
-                let msg = res2?;
-                write_rewritten_line(id, "victim", &mut vic_w, msg).await.unwrap();
+            res = read_line(id, "chat server", &mut chat_r, &mut chat_buf) => {
+                write_bogused_line(id, "victim", &mut vic_w, res?).await?;
             }
         }
     }
@@ -55,10 +53,10 @@ async fn read_line(
     from: &mut BufReader<OwnedReadHalf>,
     buf: &mut Vec<u8>,
 ) -> Result<String> {
-    let n = from.read_until(b'\n', buf).await?;
-    if n == 0 || buf.last().unwrap() != &b'\n' {
-        return Err(io::Error::new(ErrorKind::Other, "end"));
-    }
+    from.read_until(b'\n', buf).await?;
+    buf.last()
+        .filter(|&end| end != &b'\n')
+        .ok_or(io::Error::new(ErrorKind::Other, "end"))?;
     let message =
         String::from_utf8(buf.clone()).map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
     println!(
@@ -69,7 +67,7 @@ async fn read_line(
     Ok(message)
 }
 
-async fn write_rewritten_line(
+async fn write_bogused_line(
     id: i32,
     to_ident: &str,
     to: &mut OwnedWriteHalf,
