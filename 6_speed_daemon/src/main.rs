@@ -17,7 +17,7 @@ use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::codec::Framed;
 
-const CHANNEL_SIZE: usize = 2048;
+const CHANNEL_SIZE: usize = 10000;
 
 #[derive(Debug)]
 struct Sighting {
@@ -74,12 +74,15 @@ impl RoadNetwork {
 async fn main() -> io::Result<()> {
     let network = Arc::<RoadNetwork>::default();
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
+    let mut counter: i32 = 0;
 
     loop {
         let (socket, _) = listener.accept().await?;
         let network = network.clone();
-        tokio::spawn(async {
-            println!("connection established");
+        let id = counter;
+        counter += 1;
+        tokio::spawn(async move {
+            println!("{id} connection established");
             let stream_and_sink = Framed::new(socket, messages::MessageCodec::new());
             let (mut sink, mut stream) = stream_and_sink.split();
 
@@ -88,7 +91,7 @@ async fn main() -> io::Result<()> {
             let (tx_out, mut rx_out) = mpsc::channel::<ServerMessage>(CHANNEL_SIZE);
 
             //coordinate splitting heartbeat and normal messages
-            tokio::spawn(async move {
+            let t1 = tokio::spawn(async move {
                 while let Some(Ok(message)) = stream.next().await {
                     if let ClientMessage::HeartbeatRequest(interval) = message {
                         tx_heartbeat.send(interval).await.unwrap();
@@ -99,7 +102,7 @@ async fn main() -> io::Result<()> {
             });
 
             //send messages from output channel to sink, close in case of error message
-            tokio::spawn(async move {
+            let t2 = tokio::spawn(async move {
                 while let Some(out) = rx_out.recv().await {
                     let is_err = matches!(out, ServerMessage::Error(_));
                     sink.send(out).await.unwrap();
@@ -111,7 +114,7 @@ async fn main() -> io::Result<()> {
 
             //handle heart beats
             let tx_out_heart = tx_out.clone();
-            tokio::spawn(async move {
+            let t3 = tokio::spawn(async move {
                 let interval = rx_heartbeat.recv().await.expect("never recieved heartbeat");
                 let tx_out_heart_inner = tx_out_heart.clone();
                 if !interval.is_zero() {
@@ -134,7 +137,7 @@ async fn main() -> io::Result<()> {
 
             //handle camera/dispatcher messages
             let tx_out_main = tx_out.clone();
-            tokio::spawn(async move {
+            let t4 = tokio::spawn(async move {
                 match rx_main.recv().await.unwrap() {
                     ClientMessage::IAmCamera {
                         road,
@@ -142,12 +145,20 @@ async fn main() -> io::Result<()> {
                         speed_limit,
                     } => {
                         let tx_road = network.register_camera(road, speed_limit);
-                        handle_camera(road, position, speed_limit, rx_main, tx_out_main, tx_road)
-                            .await;
+                        handle_camera(
+                            id,
+                            road,
+                            position,
+                            speed_limit,
+                            rx_main,
+                            tx_out_main,
+                            tx_road,
+                        )
+                        .await;
                     }
                     ClientMessage::IAmDispatcher { roads } => {
                         let stream = network.register_dispatcher(roads);
-                        handle_dispatcher(stream, tx_out_main).await;
+                        handle_dispatcher(id, stream, tx_out_main).await;
                     }
                     _ => {
                         tx_out_main
@@ -160,12 +171,18 @@ async fn main() -> io::Result<()> {
                 };
             });
 
-            println!("connection closed");
+            t1.await.unwrap();
+            t2.await.unwrap();
+            t3.await.unwrap();
+            t4.await.unwrap();
+
+            println!("{id} connection closed");
         });
     }
 }
 
 async fn handle_dispatcher(
+    id: i32,
     mut stream: impl StreamExt<Item = Sighting> + Unpin,
     tx_out: Sender<ServerMessage>,
 ) {
@@ -220,11 +237,9 @@ fn should_be_ticketed(
                 let d2 = t2 / 86400;
                 let has_been_ticketed_for_day =
                     ticket_days.contains(&d1) || ticket_days.contains(&d2);
-                ticket_days.insert(d1);
-                ticket_days.insert(d2);
-                if has_been_ticketed_for_day {
-                    return None;
-                } else {
+                if !has_been_ticketed_for_day {
+                    ticket_days.insert(d1);
+                    ticket_days.insert(d2);
                     return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
                 }
             }
@@ -234,6 +249,7 @@ fn should_be_ticketed(
 }
 
 async fn handle_camera(
+    id: i32,
     road: RoadID,
     position: Mile,
     speed_limit: Speed,
