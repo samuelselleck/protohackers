@@ -94,7 +94,7 @@ async fn main() -> io::Result<()> {
             tokio::spawn(async move { split_messages(id, stream, tx_heartbeat, tx_main).await });
 
             //send messages from output channel to sink, close in case of error message
-            tokio::spawn(async move { pipe_output(id, rx_out, sink) });
+            tokio::spawn(async move { pipe_output(id, rx_out, sink).await });
 
             //handle heart beats
             let tx_out_h = tx_out.clone();
