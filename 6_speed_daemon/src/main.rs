@@ -6,6 +6,7 @@ use futures::stream::select_all;
 use futures::StreamExt;
 use messages::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,10 +21,10 @@ const CHANNEL_SIZE: usize = 2048;
 
 #[derive(Debug)]
 struct Sighting {
-    road_id: RoadID,
-    road_speed_limit: Speed,
+    road: RoadID,
+    speed_limit: Speed,
     plate: Plate,
-    mile: Mile,
+    position: Mile,
     time: TimeStamp,
 }
 
@@ -167,22 +168,26 @@ async fn handle_dispatcher(
     tx_out: Sender<ServerMessage>,
 ) {
     let mut log = HashMap::<RoadID, HashMap<Plate, Vec<(Mile, TimeStamp)>>>::new();
+    let mut ticket_days = HashMap::<Plate, HashSet<u32>>::new();
     while let Some(Sighting {
-        road_id,
-        road_speed_limit,
+        road: road_id,
+        speed_limit: road_speed_limit,
         plate,
-        mile,
+        position: mile,
         time,
     }) = stream.next().await
     {
-        let entries = log
+        let road_sightings = log
             .entry(road_id)
             .or_default()
             .entry(plate.clone())
             .or_default();
 
-        entries.push((mile, time));
-        if let Some((p1, p2)) = should_be_ticketed(entries, road_speed_limit) {
+        road_sightings.push((mile, time));
+        let car_ticket_days = ticket_days.entry(plate.clone()).or_default();
+        if let Some((p1, p2)) =
+            should_be_ticketed(road_sightings, road_speed_limit, car_ticket_days)
+        {
             let ticket = ServerMessage::Ticket {
                 plate,
                 road: road_id,
@@ -190,7 +195,6 @@ async fn handle_dispatcher(
                 p2,
             };
             tx_out.send(ticket).await.unwrap();
-            //TODO can multiple tickets need to be sent? w
         }
     }
 }
@@ -198,6 +202,7 @@ async fn handle_dispatcher(
 fn should_be_ticketed(
     entries: &mut Vec<(Mile, TimeStamp)>,
     speed_limit: Speed,
+    ticket_days: &mut HashSet<u32>,
 ) -> Option<((Mile, TimeStamp), (Mile, TimeStamp))> {
     let n = entries.len();
     for i in 0..n {
@@ -208,7 +213,17 @@ fn should_be_ticketed(
             if speed > speed_limit as f64 {
                 entries.swap_remove(j);
                 entries.swap_remove(i);
-                return Some(((m1, t1), (m2, t2)));
+                let d1 = t1 / 86400;
+                let d2 = t2 / 86400;
+                let has_been_ticketed_for_day =
+                    ticket_days.contains(&d1) || ticket_days.contains(&d2);
+                ticket_days.insert(d1);
+                ticket_days.insert(d2);
+                if has_been_ticketed_for_day {
+                    return None;
+                } else {
+                    return Some(((m1, t1), (m2, t2)));
+                }
             }
         }
     }
@@ -218,7 +233,7 @@ fn should_be_ticketed(
 async fn handle_camera(
     road: RoadID,
     position: Mile,
-    road_speed_limit: Speed,
+    speed_limit: Speed,
     mut rx_main: Receiver<ClientMessage>,
     tx_out: Sender<ServerMessage>,
     tx_road: Sender<Sighting>,
@@ -228,10 +243,10 @@ async fn handle_camera(
             ClientMessage::PlateDetected { plate, time } => {
                 tx_road
                     .send(Sighting {
-                        road_id: road,
-                        road_speed_limit,
+                        road,
+                        speed_limit,
                         plate,
-                        mile: position,
+                        position,
                         time,
                     })
                     .await
