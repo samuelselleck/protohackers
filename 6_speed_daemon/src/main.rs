@@ -225,7 +225,7 @@ fn should_be_ticketed(
                 if has_been_ticketed_for_day {
                     return None;
                 } else {
-                    return Some(((m1, t1), (m2, t2), (100.0 * speed.ceil()) as Speed));
+                    return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
                 }
             }
         }
