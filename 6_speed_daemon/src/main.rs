@@ -114,14 +114,16 @@ async fn main() -> io::Result<()> {
             tokio::spawn(async move {
                 let interval = rx_heartbeat.recv().await.expect("never recieved heartbeat");
                 let tx_out_heart_inner = tx_out_heart.clone();
-                tokio::spawn(async move {
-                    loop {
-                        if tx_out_heart.send(ServerMessage::HeartBeat).await.is_err() {
-                            break;
-                        };
-                        tokio::time::sleep(interval).await;
-                    }
-                });
+                if !interval.is_zero() {
+                    tokio::spawn(async move {
+                        loop {
+                            if tx_out_heart.send(ServerMessage::HeartBeat).await.is_err() {
+                                break;
+                            };
+                            tokio::time::sleep(interval).await;
+                        }
+                    });
+                }
                 if let Some(_) = rx_heartbeat.recv().await {
                     tx_out_heart_inner
                         .send(ServerMessage::Error("recieved second heartbeat".into()))
