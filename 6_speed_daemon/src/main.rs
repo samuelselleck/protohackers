@@ -230,6 +230,15 @@ async fn handle_main(
             .await?;
         }
         ClientMessage::IAmDispatcher { roads } => {
+            let tx_out = tx_out_main.clone();
+            tokio::spawn(async move {
+                let _ = rx_main.recv().await;
+                let _ = tx_out
+                    .send(ServerMessage::Error(
+                        "recieved second displacher disconnect message".into(),
+                    ))
+                    .await;
+            });
             let stream = network.register_dispatcher(roads);
             handle_dispatcher(id, stream, tx_out_main).await;
         }
