@@ -21,6 +21,7 @@ async fn main() -> io::Result<()> {
     let network = Arc::<RoadNetwork>::default();
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     let mut counter: i32 = 0;
+    println!("server started");
 
     loop {
         let (socket, _) = listener.accept().await?;
