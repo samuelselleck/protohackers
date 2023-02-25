@@ -268,13 +268,13 @@ fn should_be_ticketed(
             let (m2, t2) = entries[j];
             let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
             if speed > speed_limit as f64 {
-                entries.swap_remove(j);
-                entries.swap_remove(i);
                 let d1 = t1 / 86400;
                 let d2 = t2 / 86400;
                 let has_been_ticketed_for_day =
                     ticket_days.contains(&d1) || ticket_days.contains(&d2);
                 if !has_been_ticketed_for_day {
+                    entries.swap_remove(j);
+                    entries.swap_remove(i);
                     ticket_days.insert(d1);
                     ticket_days.insert(d2);
                     return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
