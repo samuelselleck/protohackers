@@ -25,6 +25,7 @@ async fn main() -> io::Result<()> {
 
     loop {
         let (socket, _) = listener.accept().await?;
+        println!("connecting...");
         let network = network.clone();
         let id = counter;
         counter += 1;
