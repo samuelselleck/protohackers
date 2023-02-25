@@ -107,7 +107,7 @@ async fn split_messages(
 async fn handle_heartbeat(
     mut rx_heartbeat: Receiver<Duration>,
     tx_out_heart: Sender<ServerMessage>,
-) -> io::Result<()> {
+) -> Option<()> {
     let interval = rx_heartbeat.recv().await.expect("never recieved heartbeat");
     let tx_out_heart_inner = tx_out_heart.clone();
     if !interval.is_zero() {
@@ -124,9 +124,9 @@ async fn handle_heartbeat(
         tx_out_heart_inner
             .send(ServerMessage::Error("recieved second heartbeat".into()))
             .await
-            .unwrap();
+            .ok()?;
     };
-    Ok(())
+    Some(())
 }
 
 async fn handle_main(
