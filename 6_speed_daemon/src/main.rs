@@ -4,13 +4,11 @@ use async_channel;
 use dashmap::DashMap;
 use futures::sink::SinkExt;
 use futures::stream::select_all;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use messages::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -81,7 +79,7 @@ impl Road {
                     p2,
                     speed,
                 };
-                tx_road_ticket.send(ticket).await.ok()?;
+                let _ = tx_road_ticket.send(ticket).await;
             }
         }
         Some(())
