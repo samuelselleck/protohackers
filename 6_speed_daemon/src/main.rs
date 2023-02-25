@@ -58,7 +58,7 @@ impl Road {
         mut rx_road: Receiver<Sighting>,
         tx_road_ticket: async_channel::Sender<ServerMessage>,
     ) -> Option<()> {
-        let mut log = HashMap::<RoadID, HashMap<Plate, Vec<(Mile, TimeStamp)>>>::new();
+        let mut log = HashMap::<Plate, Vec<(Mile, TimeStamp)>>::new();
         let mut ticket_days = HashMap::<Plate, HashSet<u32>>::new();
         while let Some(Sighting {
             road: road_id,
@@ -68,12 +68,7 @@ impl Road {
             time,
         }) = rx_road.recv().await
         {
-            let road_sightings = log
-                .entry(road_id)
-                .or_default()
-                .entry(plate.clone())
-                .or_default();
-
+            let road_sightings = log.entry(plate.clone()).or_default();
             road_sightings.push((mile, time));
             let car_ticket_days = ticket_days.entry(plate.clone()).or_default();
             if let Some((p1, p2, speed)) =
@@ -273,7 +268,7 @@ fn should_be_ticketed(
         let (m1, t1) = entries[i];
         for j in (i + 1)..n {
             let (m2, t2) = entries[j];
-            let speed = 100.0 * 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
+            let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
             if speed > speed_limit as f64 {
                 entries.swap_remove(j);
                 entries.swap_remove(i);
@@ -284,7 +279,7 @@ fn should_be_ticketed(
                 if !has_been_ticketed_for_day {
                     ticket_days.insert(d1);
                     ticket_days.insert(d2);
-                    return Some(((m1, t1), (m2, t2), speed.round() as Speed));
+                    return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
                 }
             }
         }
