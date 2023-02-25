@@ -128,7 +128,10 @@ async fn main() -> io::Result<()> {
             let (tx_out, rx_out) = mpsc::channel::<ServerMessage>(CHANNEL_SIZE);
 
             //coordinate splitting heartbeat and normal messages
-            tokio::spawn(async move { split_messages(id, stream, tx_heartbeat, tx_main).await });
+            let tx_out_s = tx_out.clone();
+            tokio::spawn(async move {
+                split_messages(id, stream, tx_heartbeat, tx_main, tx_out_s).await
+            });
 
             //send messages from output channel to sink, close in case of error message
             tokio::spawn(async move { pipe_output(id, rx_out, sink).await });
@@ -168,12 +171,22 @@ async fn split_messages(
     mut stream: impl StreamExt<Item = io::Result<ClientMessage>> + Unpin,
     tx_heartbeat: Sender<Duration>,
     tx_main: Sender<ClientMessage>,
+    tx_out: Sender<ServerMessage>,
 ) -> Option<()> {
-    while let Some(Ok(message)) = stream.next().await {
-        if let ClientMessage::HeartbeatRequest(interval) = message {
-            tx_heartbeat.send(interval).await.unwrap();
-        } else {
-            tx_main.send(message).await.unwrap();
+    while let Some(message) = stream.next().await {
+        match message {
+            Ok(ClientMessage::HeartbeatRequest(interval)) => {
+                tx_heartbeat.send(interval).await.unwrap();
+            }
+            Ok(message) => {
+                tx_main.send(message).await.unwrap();
+            }
+            Err(_) => {
+                tx_out
+                    .send(ServerMessage::Error("not valid message type".into()))
+                    .await
+                    .ok()?;
+            }
         }
     }
     println!("{id} client disconnected");
