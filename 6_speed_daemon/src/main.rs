@@ -202,7 +202,10 @@ async fn handle_camera(
     while let Some(msg) = rx_main.recv().await {
         match msg {
             ClientMessage::PlateDetected { plate, time } => {
-                println!("{id} camera (road = {road}, mile = {position}, speed limit = {speed_limit}) sighted {plate} at {time}");
+                println!(
+                    "{id} camera (road = {road}, mile = {position}, \
+                     speed limit = {speed_limit}) sighted {plate} at {time}"
+                );
                 tx_road
                     .send(Sighting {
                         road,

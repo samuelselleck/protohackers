@@ -8,23 +8,9 @@ use tokio_stream::StreamExt;
 
 pub const CHANNEL_SIZE: usize = 10000;
 
-#[derive(Debug)]
-pub struct Sighting {
-    pub road: RoadID,
-    pub speed_limit: Speed,
-    pub plate: Plate,
-    pub position: Mile,
-    pub time: TimeStamp,
-}
-
-#[derive(Default)]
-pub struct RoadNetwork {
-    roads: DashMap<RoadID, Road>,
-}
-
 pub struct Road {
     speed_limit: Option<Speed>,
-    rx_road: async_channel::Receiver<ServerMessage>,
+    rx_road_ticket: async_channel::Receiver<ServerMessage>,
     tx_road: mpsc::Sender<Sighting>,
 }
 
@@ -35,7 +21,7 @@ impl Default for Road {
         tokio::spawn(async move { Self::road_ticket_handler(rx_road, tx_road_ticket).await });
         Road {
             speed_limit: None,
-            rx_road: rx_road_ticket,
+            rx_road_ticket,
             tx_road,
         }
     }
@@ -50,7 +36,7 @@ impl Road {
         let mut ticket_days = HashMap::<Plate, HashSet<u32>>::new();
         while let Some(Sighting {
             road: road_id,
-            speed_limit: road_speed_limit,
+            speed_limit,
             plate,
             position: mile,
             time,
@@ -60,7 +46,7 @@ impl Road {
             road_sightings.push((mile, time));
             let car_ticket_days = ticket_days.entry(plate.clone()).or_default();
             if let Some((p1, p2, speed)) =
-                should_be_ticketed(road_sightings, road_speed_limit, car_ticket_days)
+                Self::should_be_ticketed(road_sightings, speed_limit, car_ticket_days)
             {
                 let ticket = ServerMessage::Ticket {
                     plate,
@@ -74,6 +60,49 @@ impl Road {
         }
         Some(())
     }
+
+    fn should_be_ticketed(
+        entries: &mut Vec<(Mile, TimeStamp)>,
+        speed_limit: Speed,
+        ticket_days: &mut HashSet<u32>,
+    ) -> Option<((Mile, TimeStamp), (Mile, TimeStamp), Speed)> {
+        let n = entries.len();
+        for i in 0..n {
+            let (m1, t1) = entries[i];
+            for j in (i + 1)..n {
+                let (m2, t2) = entries[j];
+                let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
+                if speed > speed_limit as f64 {
+                    let d1 = t1 / 86400;
+                    let d2 = t2 / 86400;
+                    let has_been_ticketed_for_day =
+                        ticket_days.contains(&d1) || ticket_days.contains(&d2);
+                    if !has_been_ticketed_for_day {
+                        entries.swap_remove(j);
+                        entries.swap_remove(i);
+                        ticket_days.insert(d1);
+                        ticket_days.insert(d2);
+                        return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct Sighting {
+    pub road: RoadID,
+    pub speed_limit: Speed,
+    pub plate: Plate,
+    pub position: Mile,
+    pub time: TimeStamp,
+}
+
+#[derive(Default)]
+pub struct RoadNetwork {
+    roads: DashMap<RoadID, Road>,
 }
 
 impl RoadNetwork {
@@ -90,38 +119,9 @@ impl RoadNetwork {
         let mut all = Vec::new();
         for road in roads {
             let road = self.roads.entry(road).or_default();
-            let rx_road = road.rx_road.clone();
+            let rx_road = road.rx_road_ticket.clone();
             all.push(rx_road);
         }
         select_all(all)
     }
-}
-
-fn should_be_ticketed(
-    entries: &mut Vec<(Mile, TimeStamp)>,
-    speed_limit: Speed,
-    ticket_days: &mut HashSet<u32>,
-) -> Option<((Mile, TimeStamp), (Mile, TimeStamp), Speed)> {
-    let n = entries.len();
-    for i in 0..n {
-        let (m1, t1) = entries[i];
-        for j in (i + 1)..n {
-            let (m2, t2) = entries[j];
-            let speed = 3600.0 * ((m1 as f64 - m2 as f64) / (t1 as f64 - t2 as f64)).abs();
-            if speed > speed_limit as f64 {
-                let d1 = t1 / 86400;
-                let d2 = t2 / 86400;
-                let has_been_ticketed_for_day =
-                    ticket_days.contains(&d1) || ticket_days.contains(&d2);
-                if !has_been_ticketed_for_day {
-                    entries.swap_remove(j);
-                    entries.swap_remove(i);
-                    ticket_days.insert(d1);
-                    ticket_days.insert(d2);
-                    return Some(((m1, t1), (m2, t2), (100.0 * speed).round() as Speed));
-                }
-            }
-        }
-    }
-    None
 }
